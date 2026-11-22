@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#15803d" />
-  <title>Mercadinho - mercadinho-26d87</title>
+  <title>Mercadinho - mercar-2b60b</title>
 
   <!-- Firebase SDK (Compat v10) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -607,10 +607,18 @@
   <!-- PAINEL ADMINISTRADOR -->
   <section id="sec-admin" class="section">
     <div class="container">
+      <div id="claimAdminBox" class="card-box" style="display:none; border-color:#f59e0b; background:#fffbeb;">
+        <h2>🛡️ Ativar Administrador Inicial</h2>
+        <p style="font-size:0.88rem; margin-bottom:10px;">
+          Nenhum administrador está ativo ainda neste mercadinho. Clique abaixo para definir sua conta atual como administradora:
+        </p>
+        <button class="btn-primary" onclick="claimFirstAdmin()">Tornar-me Administrador</button>
+      </div>
+
       <div class="card-box">
         <h2>📁 Pasta de Fotos no GitHub</h2>
         <p style="font-size:0.85rem; color:#4b5563; margin-bottom:10px;">
-          O GitHub funciona apenas como armário de fotos. Informe seu usuário e repositório para puxar as imagens da pasta <strong>fotos/</strong>:
+          O GitHub serve apenas como armário de fotos. Informe seu usuário e repositório da pasta <strong>fotos/</strong>:
         </p>
         <div class="form-group">
           <label>Usuário do GitHub</label>
@@ -656,7 +664,7 @@
           <input type="number" id="prodStock" placeholder="Ex: 20" />
         </div>
         <div class="form-group">
-          <label>Foto no GitHub (ex: arroz.jpg ou alimentos/arroz.jpg ou URL completa)</label>
+          <label>Foto no GitHub (ex: arroz.jpg ou pasta/arroz.jpg ou URL completa)</label>
           <input type="text" id="prodImage" placeholder="arroz.jpg" />
         </div>
         <div class="form-group">
@@ -723,7 +731,7 @@
         </div>
         <div class="form-group">
           <label>Endereço para Entrega</label>
-          <input type="text" id="authAddress" placeholder="Rua, número e referência" />
+          <input type="text" id="authAddress" placeholder="Rua, número e ponto de referência" />
         </div>
       </div>
       <div class="form-group">
@@ -793,15 +801,15 @@
   </div>
 
   <script>
-    // Configuração Firebase do projeto mercadinho-26d87
+    // Configuração Firebase do projeto mercar-2b60b
     const firebaseConfig = {
-      apiKey: "AIzaSyBSi3vqJhnZsfLzHLNg1rRLmXJM087bNaI",
-      authDomain: "mercadinho-26d87.firebaseapp.com",
-      projectId: "mercadinho-26d87",
-      storageBucket: "mercadinho-26d87.firebasestorage.app",
-      messagingSenderId: "650505666825",
-      appId: "1:650505666825:web:2e5f922e01add3521893d8",
-      measurementId: "G-Y88XN6011V"
+      apiKey: "AIzaSyCRamOCAJ5mZcF1YKOJwvt0l93mJBZgNtc",
+      authDomain: "mercar-2b60b.firebaseapp.com",
+      projectId: "mercar-2b60b",
+      storageBucket: "mercar-2b60b.firebasestorage.app",
+      messagingSenderId: "651296611147",
+      appId: "1:651296611147:web:5a292e137ff4225a14a6ce",
+      measurementId: "G-Y45SFFG10B"
     };
 
     const app = firebase.initializeApp(firebaseConfig);
@@ -819,10 +827,10 @@
       pixName: 'Mercadinho',
       ghUser: 'giliard31',
       ghRepo: 'fotos-mercadinho',
-      ghBranch: 'main'
+      ghBranch: 'main',
+      hasAdminConfigured: false
     };
 
-    // Monta URL da foto hospedada no GitHub (armário de imagens)
     function resolveGithubPhotoUrl(imgInput) {
       if (!imgInput) return 'https://via.placeholder.com/300x200?text=Sem+Foto';
       const trimmed = imgInput.trim();
@@ -942,9 +950,40 @@
       navigateTo('store');
     }
 
+    function refreshAdminUI() {
+      const adminBtn = document.getElementById('navAdminBtn');
+      const claimBox = document.getElementById('claimAdminBox');
+      const isAdmin = !!(currentUserProfile && currentUserProfile.isAdmin);
+      const canClaimInitialAdmin = !!(currentUser && !storeSettings.hasAdminConfigured && !isAdmin);
+
+      adminBtn.style.display = (isAdmin || canClaimInitialAdmin) ? 'flex' : 'none';
+      if (claimBox) {
+        claimBox.style.display = canClaimInitialAdmin ? 'block' : 'none';
+      }
+    }
+
+    async function claimFirstAdmin() {
+      if (!currentUser || storeSettings.hasAdminConfigured) return;
+      try {
+        await db.collection('usuarios').doc(currentUser.uid).set({ isAdmin: true }, { merge: true });
+        await db.collection('configuracoes').doc('loja').set(
+          { hasAdminConfigured: true, adminUid: currentUser.uid },
+          { merge: true }
+        );
+        currentUserProfile = { ...(currentUserProfile || {}), isAdmin: true };
+        storeSettings.hasAdminConfigured = true;
+        document.getElementById('drawerUserRole').textContent = 'Administrador';
+        refreshAdminUI();
+        renderAdminProducts();
+        loadAdminOrders();
+        showToast('Você agora é o Administrador do mercadinho!');
+      } catch (err) {
+        showToast('Erro ao ativar admin: ' + err.message);
+      }
+    }
+
     auth.onAuthStateChanged(async (user) => {
       currentUser = user;
-      const adminBtn = document.getElementById('navAdminBtn');
       const authBtn = document.getElementById('navAuthBtn');
       const logoutBtn = document.getElementById('navLogoutBtn');
 
@@ -962,15 +1001,15 @@
 
         document.getElementById('drawerUserName').textContent = currentUserProfile.nome || user.email;
         document.getElementById('drawerUserRole').textContent = currentUserProfile.isAdmin ? 'Administrador' : 'Cliente';
-        adminBtn.style.display = currentUserProfile.isAdmin ? 'flex' : 'none';
       } else {
         currentUserProfile = null;
         authBtn.style.display = 'flex';
         logoutBtn.style.display = 'none';
-        adminBtn.style.display = 'none';
         document.getElementById('drawerUserName').textContent = 'Visitante';
         document.getElementById('drawerUserRole').textContent = 'Faça login para finalizar pedidos';
       }
+
+      refreshAdminUI();
     });
 
     db.collection('configuracoes').doc('loja').onSnapshot((doc) => {
@@ -985,6 +1024,7 @@
         document.getElementById('displayStorePixName').textContent = storeSettings.pixName || '-';
         renderProducts();
       }
+      refreshAdminUI();
     });
 
     db.collection('produtos').orderBy('nome').onSnapshot((snapshot) => {
@@ -1262,7 +1302,7 @@
       const ghBranch = document.getElementById('adminGhBranch').value.trim() || 'main';
 
       await db.collection('configuracoes').doc('loja').set(
-        { pixKey, pixName, ghUser, ghRepo, ghBranch },
+        { pixKey, pixName, ghUser, ghRepo, ghBranch, hasAdminConfigured: true },
         { merge: true }
       );
       showToast('Configurações de GitHub e Pix salvas!');
